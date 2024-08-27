@@ -1,0 +1,65 @@
+from flask import Flask, jsonify, request, abort
+from datetime import datetime
+
+app = Flask(__name__)
+
+events = {}
+
+@app.route('/api/v1/calendar', methods=['POST'])
+def create_event():
+    data = request.get_json()
+    date = data.get('date')
+    title = data.get('title')
+    text = data.get('text')
+
+    try:
+        datetime.strptime(date, '%Y-%m-%d')
+        if len(title) > 30 or len(text) > 200:
+            abort(400, 'Превышена максимальная длина заголовка или текста.')
+        if date in events:
+            abort(400, 'На эту дату уже запланировано событие.')
+    except ValueError:
+        abort(400, 'Неверный формат даты.')
+
+    event_id = len(events) + 1
+    events[date] = {'id': event_id, 'date': date, 'title': title, 'text': text}
+    return jsonify(events[date]), 201
+
+@app.route('/api/v1/calendar', methods=['GET'])
+def list_events():
+    return jsonify(list(events.values()))
+
+@app.route('/api/v1/calendar/<date>', methods=['GET'])
+def get_event(date):
+    event = events.get(date)
+    if not event:
+        abort(404, 'Событие не найдено.')
+    return jsonify(event)
+
+@app.route('/api/v1/calendar/<date>', methods=['PUT'])
+def update_event(date):
+    event = events.get(date)
+    if not event:
+        abort(404, 'Событие не найдено.')
+
+    data = request.get_json()
+    title = data.get('title')
+    text = data.get('text')
+
+    if title and len(title) > 30:
+        abort(400, 'Превышена максимальная длина заголовка.')
+    if text and len(text) > 200:
+        abort(400, 'Превышена максимальная длина текста.')
+
+    event.update(data)
+    return jsonify(event)
+
+@app.route('/api/v1/calendar/<date>', methods=['DELETE'])
+def delete_event(date):
+    if date in events:
+        del events[date]
+        return jsonify({'message': 'Событие удалено.'}), 200
+    abort(404, 'Событие не найдено.')
+
+if __name__ == '__main__':
+    app.run(debug=True)
